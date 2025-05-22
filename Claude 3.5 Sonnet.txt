@@ -1,0 +1,735 @@
+# Aplicación CRUD de Productos con Laravel
+
+Este tutorial muestra cómo desarrollar una aplicación web de gestión de productos con Laravel, implementando las operaciones CRUD (Crear, Leer, Actualizar, Eliminar) con una interfaz responsiva y una base de datos MySQL.
+
+## Requisitos previos
+
+- PHP >= 8.1
+- Composer
+- MySQL
+- Node.js y npm (para los assets)
+
+## Paso 1: Crear un nuevo proyecto Laravel
+
+```bash
+composer create-project laravel/laravel gestion-productos
+cd gestion-productos
+```
+
+## Paso 2: Configurar la base de datos
+
+Edita el archivo `.env` en la raíz del proyecto:
+
+```dotenv
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=productos_db
+DB_USERNAME=tu_usuario
+DB_PASSWORD=tu_contraseña
+```
+
+## Paso 3: Crear la migración para la tabla de productos
+
+```bash
+php artisan make:migration create_products_table
+```
+
+Edita el archivo de migración en `database/migrations/xxxx_xx_xx_create_products_table.php`:
+
+```php
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    public function up()
+    {
+        Schema::create('products', function (Blueprint $table) {
+            $table->id();
+            $table->string('name');
+            $table->text('description')->nullable();
+            $table->decimal('price', 10, 2);
+            $table->integer('stock')->default(0);
+            $table->string('image')->nullable();
+            $table->boolean('active')->default(true);
+            $table->timestamps();
+        });
+    }
+
+    public function down()
+    {
+        Schema::dropIfExists('products');
+    }
+};
+```
+
+## Paso 4: Crear el modelo Product
+
+```bash
+php artisan make:model Product
+```
+
+Edita el archivo `app/Models/Product.php`:
+
+```php
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Product extends Model
+{
+    use HasFactory;
+    
+    protected $fillable = [
+        'name',
+        'description',
+        'price',
+        'stock',
+        'image',
+        'active'
+    ];
+}
+```
+
+## Paso 5: Crear el controlador ProductController
+
+```bash
+php artisan make:controller ProductController --resource
+```
+
+Edita el archivo `app/Http/Controllers/ProductController.php`:
+
+```php
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Product;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+
+class ProductController extends Controller
+{
+    /**
+     * Mostrar lista de productos.
+     */
+    public function index()
+    {
+        $products = Product::latest()->paginate(10);
+        return view('products.index', compact('products'));
+    }
+
+    /**
+     * Mostrar formulario para crear un nuevo producto.
+     */
+    public function create()
+    {
+        return view('products.create');
+    }
+
+    /**
+     * Almacenar un nuevo producto.
+     */
+    public function store(Request $request)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'price' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'active' => 'sometimes|boolean',
+        ]);
+
+        $data = $request->all();
+        
+        // Manejar la carga de imágenes
+        if ($request->hasFile('image')) {
+            $image = $request->file('image');
+            $imageName = time() . '.' . $image->getClientOriginalExtension();
+            $image->storeAs('public/products', $imageName);
+            $data['image'] = 'products/' . $imageName;
+        }
+
+        Product::create($data);
+        
+        return redirect()->route('products.index')
+            ->with('success', 'Producto creado exitosamente.');
+    }
+
+    /**
+     * Mostrar un producto específico.
+     */
+    public function show(Product $product)
+    {
+        return view('products.show', compact('product'));
+    }
+
+    /**
+     * Mostrar formulario para editar un producto.
+     */
+    public function edit(Product $product)
+    {
+        return view('products.edit', compact('product'));
+    }
+
+    /**
+     * Actualizar el producto especificado.
+     */
+    public function update(Request $request, Product $product)
+    {
+        $request->validate([
+            'name' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'price' => 'required|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
+            'active' => 'sometimes|boolean',
+        ]);
+
+        $data = $request->all();
+        
+        // Manejar la carga de imágenes
+        if ($request->hasFile('image')) {
+            // Eliminar imagen anterior si existe
+            if ($product->image && Storage::exists('public/' . $product->image)) {
+                Storage::delete('public/' . $product->image);
+            }
+            
+            $image = $request->file('image');
+            $imageName = time() . '.' . $image->getClientOriginalExtension();
+            $image->storeAs('public/products', $imageName);
+            $data['image'] = 'products/' . $imageName;
+        }
+
+        $product->update($data);
+        
+        return redirect()->route('products.index')
+            ->with('success', 'Producto actualizado exitosamente.');
+    }
+
+    /**
+     * Eliminar el producto especificado.
+     */
+    public function destroy(Product $product)
+    {
+        // Eliminar imagen si existe
+        if ($product->image && Storage::exists('public/' . $product->image)) {
+            Storage::delete('public/' . $product->image);
+        }
+        
+        $product->delete();
+        
+        return redirect()->route('products.index')
+            ->with('success', 'Producto eliminado exitosamente.');
+    }
+}
+```
+
+## Paso 6: Crear las rutas
+
+Edita el archivo `routes/web.php`:
+
+```php
+<?php
+
+use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ProductController;
+
+Route::get('/', function () {
+    return redirect()->route('products.index');
+});
+
+Route::resource('products', ProductController::class);
+```
+
+## Paso 7: Configurar los assets con Vite
+
+```bash
+npm install
+```
+
+## Paso 8: Crear las vistas
+
+Primero, crea una plantilla base. Crea el archivo `resources/views/layouts/app.blade.php`:
+
+```blade
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestión de Productos</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Custom CSS -->
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="{{ route('products.index') }}">Gestión de Productos</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('products.index') }}">Productos</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{{ route('products.create') }}">Nuevo Producto</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container mt-4">
+        @if(session('success'))
+            <div class="alert alert-success">
+                {{ session('success') }}
+            </div>
+        @endif
+
+        @yield('content')
+    </main>
+
+    <footer class="mt-5 py-3 bg-light text-center">
+        <div class="container">
+            <p class="mb-0">(c) {{ date('Y') }} Gestión de Productos</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+```
+
+### Vista de Listado de Productos
+
+Crea el archivo `resources/views/products/index.blade.php`:
+
+```blade
+@extends('layouts.app')
+
+@section('content')
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Listado de Productos</h1>
+        <a href="{{ route('products.create') }}" class="btn btn-primary">Nuevo Producto</a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Imagen</th>
+                            <th>Nombre</th>
+                            <th>Precio</th>
+                            <th>Stock</th>
+                            <th>Estado</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @forelse($products as $product)
+                            <tr>
+                                <td>{{ $product->id }}</td>
+                                <td>
+                                    @if($product->image)
+                                        <img src="{{ Storage::url($product->image) }}" alt="{{ $product->name }}" width="50">
+                                    @else
+                                        <span class="text-muted">Sin imagen</span>
+                                    @endif
+                                </td>
+                                <td>{{ $product->name }}</td>
+                                <td>{{ number_format($product->price, 2) }} €</td>
+                                <td>{{ $product->stock }}</td>
+                                <td>
+                                    @if($product->active)
+                                        <span class="badge bg-success">Activo</span>
+                                    @else
+                                        <span class="badge bg-danger">Inactivo</span>
+                                    @endif
+                                </td>
+                                <td>
+                                    <div class="btn-group" role="group">
+                                        <a href="{{ route('products.show', $product->id) }}" class="btn btn-sm btn-info">Ver</a>
+                                        <a href="{{ route('products.edit', $product->id) }}" class="btn btn-sm btn-warning">Editar</a>
+                                        <form action="{{ route('products.destroy', $product->id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas eliminar este producto?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="7" class="text-center">No hay productos registrados.</td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="d-flex justify-content-center mt-4">
+                {{ $products->links() }}
+            </div>
+        </div>
+    </div>
+@endsection
+```
+
+### Vista de Creación de Producto
+
+Crea el archivo `resources/views/products/create.blade.php`:
+
+```blade
+@extends('layouts.app')
+
+@section('content')
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Crear Nuevo Producto</h1>
+        <a href="{{ route('products.index') }}" class="btn btn-secondary">Volver</a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form action="{{ route('products.store') }}" method="POST" enctype="multipart/form-data">
+                @csrf
+
+                <div class="mb-3">
+                    <label for="name" class="form-label">Nombre</label>
+                    <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name') }}" required>
+                    @error('name')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label for="description" class="form-label">Descripción</label>
+                    <textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="3">{{ old('description') }}</textarea>
+                    @error('description')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="price" class="form-label">Precio</label>
+                        <div class="input-group">
+                            <span class="input-group-text">€</span>
+                            <input type="number" step="0.01" min="0" class="form-control @error('price') is-invalid @enderror" id="price" name="price" value="{{ old('price') }}" required>
+                            @error('price')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="stock" class="form-label">Stock</label>
+                        <input type="number" min="0" class="form-control @error('stock') is-invalid @enderror" id="stock" name="stock" value="{{ old('stock', 0) }}" required>
+                        @error('stock')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="image" class="form-label">Imagen</label>
+                    <input type="file" class="form-control @error('image') is-invalid @enderror" id="image" name="image">
+                    @error('image')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="active" name="active" value="1" {{ old('active', '1') == '1' ? 'checked' : '' }}>
+                    <label class="form-check-label" for="active">Activo</label>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary">Guardar Producto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+@endsection
+```
+
+### Vista de Detalles de Producto
+
+Crea el archivo `resources/views/products/show.blade.php`:
+
+```blade
+@extends('layouts.app')
+
+@section('content')
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Detalles del Producto</h1>
+        <div>
+            <a href="{{ route('products.edit', $product->id) }}" class="btn btn-warning">Editar</a>
+            <a href="{{ route('products.index') }}" class="btn btn-secondary">Volver</a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    @if($product->image)
+                        <img src="{{ Storage::url($product->image) }}" alt="{{ $product->name }}" class="img-fluid rounded">
+                    @else
+                        <div class="bg-light p-5 text-center rounded">
+                            <p class="text-muted">Sin imagen</p>
+                        </div>
+                    @endif
+                </div>
+                <div class="col-md-8">
+                    <h2>{{ $product->name }}</h2>
+                    
+                    <p class="fs-4 text-primary mb-4">
+                        {{ number_format($product->price, 2) }} €
+                    </p>
+                    
+                    <div class="mb-3">
+                        <h5>Descripción:</h5>
+                        <p>{{ $product->description ?? 'Sin descripción' }}</p>
+                    </div>
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h5>Stock:</h5>
+                            <p>{{ $product->stock }} unidades</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Estado:</h5>
+                            @if($product->active)
+                                <span class="badge bg-success fs-6">Activo</span>
+                            @else
+                                <span class="badge bg-danger fs-6">Inactivo</span>
+                            @endif
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h5>Creado:</h5>
+                        <p>{{ $product->created_at->format('d/m/Y H:i') }}</p>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <h5>Última actualización:</h5>
+                        <p>{{ $product->updated_at->format('d/m/Y H:i') }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+@endsection
+```
+
+### Vista de Edición de Producto
+
+Crea el archivo `resources/views/products/edit.blade.php`:
+
+```blade
+@extends('layouts.app')
+
+@section('content')
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Editar Producto</h1>
+        <a href="{{ route('products.index') }}" class="btn btn-secondary">Volver</a>
+    </div>
+
+    <div class="card">
+        <div class="card-body">
+            <form action="{{ route('products.update', $product->id) }}" method="POST" enctype="multipart/form-data">
+                @csrf
+                @method('PUT')
+
+                <div class="mb-3">
+                    <label for="name" class="form-label">Nombre</label>
+                    <input type="text" class="form-control @error('name') is-invalid @enderror" id="name" name="name" value="{{ old('name', $product->name) }}" required>
+                    @error('name')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="mb-3">
+                    <label for="description" class="form-label">Descripción</label>
+                    <textarea class="form-control @error('description') is-invalid @enderror" id="description" name="description" rows="3">{{ old('description', $product->description) }}</textarea>
+                    @error('description')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label for="price" class="form-label">Precio</label>
+                        <div class="input-group">
+                            <span class="input-group-text">€</span>
+                            <input type="number" step="0.01" min="0" class="form-control @error('price') is-invalid @enderror" id="price" name="price" value="{{ old('price', $product->price) }}" required>
+                            @error('price')
+                                <div class="invalid-feedback">{{ $message }}</div>
+                            @enderror
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="stock" class="form-label">Stock</label>
+                        <input type="number" min="0" class="form-control @error('stock') is-invalid @enderror" id="stock" name="stock" value="{{ old('stock', $product->stock) }}" required>
+                        @error('stock')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+                    </div>
+                </div>
+
+                <div class="mb-3">
+                    <label for="image" class="form-label">Imagen</label>
+                    
+                    @if($product->image)
+                        <div class="mb-2">
+                            <img src="{{ Storage::url($product->image) }}" alt="{{ $product->name }}" width="100" class="d-block">
+                            <small class="text-muted">Imagen actual. Sube una nueva para reemplazarla.</small>
+                        </div>
+                    @endif
+                    
+                    <input type="file" class="form-control @error('image') is-invalid @enderror" id="image" name="image">
+                    @error('image')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
+
+                <div class="mb-3 form-check">
+                    <input type="checkbox" class="form-check-input" id="active" name="active" value="1" {{ old('active', $product->active) ? 'checked' : '' }}>
+                    <label class="form-check-label" for="active">Activo</label>
+                </div>
+
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-primary">Actualizar Producto</button>
+                </div>
+            </form>
+        </div>
+    </div>
+@endsection
+```
+
+## Paso 9: Ejecutar las migraciones
+
+```bash
+php artisan migrate
+```
+
+## Paso 10: Crear un enlace simbólico para el almacenamiento
+
+```bash
+php artisan storage:link
+```
+
+## Paso 11: Iniciar el servidor de desarrollo
+
+```bash
+php artisan serve
+```
+
+## Paso 12 (opcional): Crear datos de prueba
+
+Crea un archivo `database/seeders/ProductSeeder.php`:
+
+```php
+<?php
+
+namespace Database\Seeders;
+
+use App\Models\Product;
+use Illuminate\Database\Seeder;
+
+class ProductSeeder extends Seeder
+{
+    public function run()
+    {
+        $products = [
+            [
+                'name' => 'Smartphone XYZ',
+                'description' => 'Smartphone de última generación con cámara de alta resolución.',
+                'price' => 399.99,
+                'stock' => 50,
+                'active' => true,
+            ],
+            [
+                'name' => 'Laptop Pro',
+                'description' => 'Laptop potente para profesionales y gamers.',
+                'price' => 899.99,
+                'stock' => 25,
+                'active' => true,
+            ],
+            [
+                'name' => 'Auriculares Bluetooth',
+                'description' => 'Auriculares inalámbricos con cancelación de ruido.',
+                'price' => 79.99,
+                'stock' => 100,
+                'active' => true,
+            ],
+            [
+                'name' => 'Monitor 4K',
+                'description' => 'Monitor de alta resolución para diseñadores.',
+                'price' => 349.99,
+                'stock' => 15,
+                'active' => true,
+            ],
+            [
+                'name' => 'Teclado mecánico',
+                'description' => 'Teclado gaming con retroiluminación RGB.',
+                'price' => 69.99,
+                'stock' => 35,
+                'active' => true,
+            ],
+        ];
+
+        foreach ($products as $product) {
+            Product::create($product);
+        }
+    }
+}
+```
+
+Actualiza el archivo `database/seeders/DatabaseSeeder.php`:
+
+```php
+<?php
+
+namespace Database\Seeders;
+
+use Illuminate\Database\Seeder;
+
+class DatabaseSeeder extends Seeder
+{
+    public function run()
+    {
+        $this->call([
+            ProductSeeder::class,
+        ]);
+    }
+}
+```
+
+Ejecuta el seeder:
+
+```bash
+php artisan db:seed
+```
+
+## Listo
+
+Ahora puedes acceder a tu aplicación en [http://localhost:8000](http://localhost:8000) y gestionar tus productos con todas las operaciones CRUD implementadas.
+
