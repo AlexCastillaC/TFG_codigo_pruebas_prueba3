@@ -1,0 +1,246 @@
+#rutas
+<?php
+
+use Illuminate\Support\Facades\Route;
+
+Route::get('/', function () {
+    return view('welcome');
+});
+
+Route::get('/products', 'App\Http\Controllers\ProductController@index')->name('products.index');
+Route::get('/products/create', 'App\Http\Controllers\ProductController@create')->name('products.create');
+Route::post('/products', 'App\Http\Controllers\ProductController@store')->name('products.store');
+Route::get('/products/{id}/edit', 'App\Http\Controllers\ProductController@edit')->name('products.edit');
+Route::put('/products/{id}', 'App\Http\Controllers\ProductController@update')->name('products.update');
+Route::delete('/products/{id}', 'App\Http\Controllers\ProductController@destroy')->name('products.destroy');
+
+#vistas
+edit
+<!-- resources/views/products/edit.blade.php -->
+@extends('layouts.app')
+@section('content')
+<div class="container">
+    <h1>Editar Producto</h1>
+    <form action="{{ route('products.update', $product->id) }}" method="POST">
+        @csrf
+        @method('PUT')
+        <div class="form-group">
+            <label for="nombre">Nombre:</label>
+            <input type="text" name="nombre" id="nombre" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="description">Descripción:</label>
+            <textarea name="description" id="description" class="form-control"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="precio">Precio:</label>
+            <input type="number" step="0.01" name="precio" id="precio" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="existencias">Existencias:</label>
+            <input type="number" step="0.01" name="existencias" id="existencias" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Actualizar</button>
+    </form>
+</div>
+@endsection
+
+create
+<!-- resources/views/products/create.blade.php -->
+@extends('layouts.app')
+@section('content')
+<div class="container">
+    <h1>Crear Nuevo Producto</h1>
+    <form action="{{ route('products.store') }}" method="POST">
+        @csrf
+        <div class="form-group">
+            <label for="nombre">Nombre:</label>
+            <input type="text" name="nombre" id="nombre" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="description">Descripción:</label>
+            <textarea name="description" id="description" class="form-control"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="precio">Precio:</label>
+            <input type="number" step="0.01" name="precio" id="precio" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="existencias">Existencias:</label>
+            <input type="number" step="0.01" name="existencias" id="existencias" class="form-control" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Guardar</button>
+    </form>
+</div>
+@endsection
+
+index
+<!-- resources/views/products/index.blade.php -->
+@extends('layouts.app')
+@section('content')
+<div class="container">
+    <h1>Lista de Productos</h1>
+    <a href="{{ route('products.create') }}" class="btn btn-primary mb-2">Crear Nuevo</a>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th>Precio</th>
+                <th>Existencias</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($products as $product)
+            <tr>
+                <td>{{ $product->id }}</td>
+                <td>{{ $product->nombre }}</td>
+                <td>{{ $product->descripcion }}</td>
+                <td>{{ $product->precio }}</td>
+                <td>{{ $product->existencias }}</td>
+                <td>
+                    <a href="{{ route('products.edit', $product->id) }}" class="btn btn-warning">Editar</a>
+                    <form action="{{ route('products.destroy', $product->id) }}" method="POST" style="display:inline;">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-danger" onclick="return confirm('¿Estás seguro de eliminar este producto?');">Eliminar</button>
+                    </form>
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+@endsection
+
+app
+<!-- resources/views/layouts/app.blade.php -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@yield('title', 'Mi Aplicación')</title>
+    <!-- Agregar enlaces a estilos y scripts -->
+</head>
+<body>
+    <header>
+        <!-- Encabezado de la aplicación -->
+    </header>
+    <main>
+        @yield('content')
+    </main>
+    <footer>
+        <!-- Pie de página de la aplicación -->
+    </footer>
+</body>
+</html>
+
+#migracion
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('products', function (Blueprint $table) {
+            $table->id();
+            $table->string('nombre');
+            $table->text('descripcion')->nullable();
+            $table->decimal('precio', 8, 2);
+            $table->unsignedInteger('existencias');
+            $table->timestamps();
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('products');
+    }
+};
+
+
+#modelo
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+
+class Product extends Model
+{
+    use HasFactory;
+
+    protected $fillable = [
+        'nombre',
+        'descripcion',
+        'precio',
+        'existencias',
+    ];
+}
+
+#controlador
+<?php
+
+// app/Http/Controllers/ProductController.php
+
+namespace App\Http\Controllers;
+
+use App\Models\Product;
+use Illuminate\Http\Request;
+
+class ProductController extends Controller
+{
+    public function index()
+    {
+        $products = Product::all();
+        return view('products.index', compact('products'));
+    }
+
+    public function create()
+    {
+        return view('products.create');
+    }
+
+    public function store(Request $request)
+    {
+        $product = new Product($request->all());
+        $product->save();
+        return redirect()->route('products.index')->with('success', 'Producto creado exitosamente.');
+    }
+
+    public function edit($id)
+    {
+        $product = Product::findOrFail($id);
+        return view('products.edit', compact('product'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $product = Product::findOrFail($id);
+        $product->fill($request->all());
+        $product->save();
+        return redirect()->route('products.index')->with('success', 'Producto actualizado exitosamente.');
+    }
+
+    public function destroy($id)
+    {
+        $product = Product::findOrFail($id);
+        $product->delete();
+        return redirect()->route('products.index')->with('success', 'Producto eliminado exitosamente.');
+    }
+}
+
