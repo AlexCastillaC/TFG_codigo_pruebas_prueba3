@@ -1,0 +1,290 @@
+## 1. Creación del Proyecto Ejecuta el siguiente comando en la terminal para crear el proyecto Laravel: ```bash composer create-project laravel/laravel crud-app
+### 2. Configuración de la Base de Datos
+DB_CONNECTION=mysql DB_HOST=127.0.0.1 DB_PORT=3306 DB_DATABASE=nombre_base_de_datos DB_USERNAME=tu_usuario DB_PASSWORD=tu_contraseña
+Genera el modelo junto con su migración:
+bash
+Copiar
+php artisan make:model Producto -m
+Edita el archivo de migración generado en database/migrations/xxxx_xx_xx_create_productos_table.php y define los campos necesarios:
+php
+Copiar
+public function up()
+{
+    Schema::create('productos', function (Blueprint $table) {
+        $table->id();
+        $table->string('nombre');
+        $table->text('descripcion')->nullable();
+        $table->decimal('precio', 8, 2);
+        $table->timestamps();
+    });
+}
+
+Ejecuta la migración para crear la tabla:
+bash
+Copiar
+php artisan migrate
+4. Creación del Controlador de Recursos
+Genera el controlador para gestionar las operaciones CRUD:
+bash
+Copiar
+php artisan make:controller ProductoController --resource
+
+Edita el archivo app/Http/Controllers/ProductoController.php y agrega el siguiente contenido:
+php
+Copiar
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Producto;
+use Illuminate\Http\Request;
+
+class ProductoController extends Controller
+{
+    // Muestra la lista de productos
+    public function index()
+    {
+        $productos = Producto::all();
+        return view('productos.index', compact('productos'));
+    }
+
+    // Muestra el formulario para crear un nuevo producto
+    public function create()
+    {
+        return view('productos.create');
+    }
+
+    // Guarda un nuevo producto en la base de datos
+    public function store(Request $request)
+    {
+        $request->validate([
+            'nombre' => 'required|max:255',
+            'precio' => 'required|numeric',
+        ]);
+
+        Producto::create($request->all());
+
+        return redirect()->route('productos.index')
+                         ->with('success', 'Producto creado correctamente.');
+    }
+
+    // Muestra los detalles de un producto específico
+    public function show($id)
+    {
+        $producto = Producto::findOrFail($id);
+        return view('productos.show', compact('producto'));
+    }
+
+    // Muestra el formulario para editar un producto existente
+    public function edit($id)
+    {
+        $producto = Producto::findOrFail($id);
+        return view('productos.edit', compact('producto'));
+    }
+
+    // Actualiza el producto en la base de datos
+    public function update(Request $request, $id)
+    {
+        $request->validate([
+            'nombre' => 'required|max:255',
+            'precio' => 'required|numeric',
+        ]);
+
+        $producto = Producto::findOrFail($id);
+        $producto->update($request->all());
+
+        return redirect()->route('productos.index')
+                         ->with('success', 'Producto actualizado correctamente.');
+    }
+
+    // Elimina el producto de la base de datos
+    public function destroy($id)
+    {
+        $producto = Producto::findOrFail($id);
+        $producto->delete();
+
+        return redirect()->route('productos.index')
+                         ->with('success', 'Producto eliminado correctamente.');
+    }
+}
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class Producto extends Model
+{
+    protected $fillable = ['nombre', 'descripcion', 'precio'];
+}
+
+
+5. Definición de Rutas
+Edita el archivo routes/web.php y agrega la ruta de recurso para el CRUD:
+php
+Copiar
+Route::resource('productos', ProductoController::class);
+
+Esto generará las rutas necesarias para las operaciones CRUD (index, create, store, show, edit, update, destroy).
+
+6. Creación de las Vistas (Blade Templates)
+Crea el directorio resources/views/productos y dentro de él los siguientes archivos:
+6.1 Layout General
+Crea el archivo resources/views/layouts/app.blade.php:
+blade
+Copiar
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>CRUD de Productos</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+</head>
+<body>
+    @yield('content')
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.5.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
+6.2 Vista de Listado
+Crea resources/views/productos/index.blade.php:
+blade
+Copiar
+@extends('layouts.app')
+
+@section('content')
+<div class="container">
+    <h1>Lista de Productos</h1>
+    @if(session('success'))
+        <div class="alert alert-success">{{ session('success') }}</div>
+    @endif
+    <a href="{{ route('productos.create') }}" class="btn btn-primary mb-3">Nuevo Producto</a>
+    <table class="table table-bordered">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Precio</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($productos as $producto)
+            <tr>
+                <td>{{ $producto->id }}</td>
+                <td>{{ $producto->nombre }}</td>
+                <td>${{ $producto->precio }}</td>
+                <td>
+                    <a href="{{ route('productos.show', $producto->id) }}" class="btn btn-sm btn-info">Ver</a>
+                    <a href="{{ route('productos.edit', $producto->id) }}" class="btn btn-sm btn-warning">Editar</a>
+                    <form action="{{ route('productos.destroy', $producto->id) }}" method="POST" style="display:inline;">
+                        @csrf
+                        @method('DELETE')
+                        <button type="submit" class="btn btn-sm btn-danger"
+                                onclick="return confirm('¿Está seguro de eliminar este producto?');">Eliminar</button>
+                    </form>
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
+@endsection
+
+6.3 Vista para Crear Producto
+Crea resources/views/productos/create.blade.php:
+blade
+Copiar
+@extends('layouts.app')
+
+@section('content')
+<div class="container">
+    <h1>Crear Producto</h1>
+    @if($errors->any())
+    <div class="alert alert-danger">
+      <ul>
+         @foreach($errors->all() as $error)
+           <li>{{ $error }}</li>
+         @endforeach
+      </ul>
+    </div>
+    @endif
+    <form action="{{ route('productos.store') }}" method="POST">
+        @csrf
+        <div class="form-group">
+            <label for="nombre">Nombre:</label>
+            <input type="text" name="nombre" class="form-control" placeholder="Ingrese el nombre" required>
+        </div>
+        <div class="form-group">
+            <label for="descripcion">Descripción:</label>
+            <textarea name="descripcion" class="form-control" placeholder="Ingrese una descripción"></textarea>
+        </div>
+        <div class="form-group">
+            <label for="precio">Precio:</label>
+            <input type="text" name="precio" class="form-control" placeholder="Ingrese el precio" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Crear Producto</button>
+    </form>
+</div>
+@endsection
+
+6.4 Vista para Editar Producto
+Crea resources/views/productos/edit.blade.php:
+blade
+Copiar
+@extends('layouts.app')
+
+@section('content')
+<div class="container">
+    <h1>Editar Producto</h1>
+    @if($errors->any())
+    <div class="alert alert-danger">
+      <ul>
+         @foreach($errors->all() as $error)
+           <li>{{ $error }}</li>
+         @endforeach
+      </ul>
+    </div>
+    @endif
+    <form action="{{ route('productos.update', $producto->id) }}" method="POST">
+        @csrf
+        @method('PUT')
+        <div class="form-group">
+            <label for="nombre">Nombre:</label>
+            <input type="text" name="nombre" class="form-control" value="{{ $producto->nombre }}" required>
+        </div>
+        <div class="form-group">
+            <label for="descripcion">Descripción:</label>
+            <textarea name="descripcion" class="form-control">{{ $producto->descripcion }}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="precio">Precio:</label>
+            <input type="text" name="precio" class="form-control" value="{{ $producto->precio }}" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Actualizar Producto</button>
+    </form>
+</div>
+@endsection
+
+6.5 Vista para Mostrar Detalle
+Crea resources/views/productos/show.blade.php:
+blade
+Copiar
+@extends('layouts.app')
+
+@section('content')
+<div class="container">
+    <h1>Detalle del Producto</h1>
+    <div class="card">
+        <div class="card-header">
+            {{ $producto->nombre }}
+        </div>
+        <div class="card-body">
+            <h5 class="card-title">Precio: ${{ $producto->precio }}</h5>
+            <p class="card-text">{{ $producto->descripcion }}</p>
+            <a href="{{ route('productos.index') }}" class="btn btn-secondary">Volver a la Lista</a>
+        </div>
+    </div>
+</div>
+@endsection
